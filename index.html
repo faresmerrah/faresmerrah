@@ -356,14 +356,14 @@ tbody tr:hover { background: var(--table-hover); }
     <div class="login-card">
       <div class="login-header">
         <div class="login-logo"><i class="fa-solid fa-shield-halved"></i><div class="badge"><i class="fa-solid fa-star"></i></div></div>
-        <h1>منصة التنسيق الرقمي</h1>
+        <h1>منصة إنشغال</h1>
         <p class="subtitle">نظام متكامل للمديرية والمراكز التكوينية</p>
         <div style="margin-top:8px;"><span class="fares-logo">FARES</span><span class="fares-logo-sub"> ✦ المطور ✦</span></div>
       </div>
 
       <div class="role-selector">
         <button class="active" id="loginRoleDirectorate" onclick="selectLoginRole('directorate')"><i class="fa-solid fa-building-columns"></i> المديرية</button>
-        <button id="loginRoleCenter" onclick="selectLoginRole('center')"><i class="fa-solid fa-school"></i> مركز / معهد</button>
+        <button id="loginRoleCenter" onclick="selectLoginRole('center')"><i class="fa-solid fa-school"></i> مركز / معهد/ مدرسة خاصة</button>
       </div>
 
       <div id="directorateFields">
@@ -379,7 +379,7 @@ tbody tr:hover { background: var(--table-hover); }
           <div class="login-field"><label><i class="fa-solid fa-building"></i> اختر المؤسسة</label><select id="loginCenterSelect"><option value="">-- اختر المؤسسة --</option></select></div>
           <div class="login-field"><label><i class="fa-solid fa-key"></i> كلمة السر</label><input type="password" id="loginCenterPass" placeholder="أدخل كلمة السر" onkeyup="if(event.key==='Enter')handleLogin()"></div>
         </div>
-        <div class="center-hint" id="centerHint"><i class="fa-solid fa-phone"></i> كلمة السر يتم الحصول عليها بالاتصال بالمديرية</div>
+        <div class="center-hint" id="centerHint"><i class="fa-solid fa-phone"></i>  كلمة السر يتم الحصول عليها بالاتصال بالمديرية (حسان بلحاج)</div>
       </div>
 
       <div class="login-field" style="text-align:right; margin-bottom:10px;">
@@ -437,7 +437,7 @@ tbody tr:hover { background: var(--table-hover); }
           <div class="form-field"><label>المؤسسة التكوينية المعنية</label><select id="add-form-center"></select></div>
           <div class="form-field"><label>تصنيف الإنشغال</label><select id="add-form-type"></select></div>
           <div class="form-field"><label>درجة الأولوية</label><select id="add-form-priority"><option value="عادي">عادي 🟢</option><option value="متوسط">متوسط 🟡</option><option value="مستعجل جداً">مستعجل جداً 🔴</option></select></div>
-          <div class="form-field"><label>المحرر</label><input type="text" id="add-form-author" placeholder="مثال: مدير المعهد..."></div>
+          <div class="form-field"><label>المحرر</label><input type="text" id="add-form-author" placeholder="مثال: مراح فارس..."></div>
           <div class="form-field full"><label>تفاصيل الإنشغال</label><textarea id="add-form-details" placeholder="اكتب تفاصيل الإنشغال بدقة..."></textarea></div>
         </div>
         <button class="btn-primary" style="width:100%; justify-content:center;" onclick="submitNewIssue()"><i class="fa-solid fa-save"></i> حفظ وتدوين الإنشغال</button>
@@ -468,7 +468,7 @@ tbody tr:hover { background: var(--table-hover); }
 
     <!-- LIST -->
     <section class="page hidden" id="page-list">
-      <div class="page-header"><h2><i class="fa-solid fa-list-check"></i> متابعة القوائم</h2></div>
+      <div class="page-header"><h2><i class="fa-solid fa-list-check"></i> متابعة الإنشغالات</h2></div>
       <div class="tabs-container">
         <button class="tab-btn active" onclick="switchListTab('all')">جميع الإنشغالات</button>
         <button class="tab-btn" onclick="switchListTab('directorate')">من المديرية</button>
@@ -511,15 +511,15 @@ tbody tr:hover { background: var(--table-hover); }
 
     <!-- SEND PANEL -->
     <section class="page hidden" id="page-send-panel">
-      <div class="page-header"><h2><i class="fa-solid fa-paper-plane"></i> إرسال إنشغال رسمي</h2><span class="center-badge"><i class="fa-solid fa-building"></i><span id="centerBadgeName">مركز تكويني</span></span></div>
+      <div class="page-header"><h2><i class="fa-solid fa-paper-plane"></i> إرسال إنشغال رسمي / للمديرية</h2><span class="center-badge"><i class="fa-solid fa-building"></i><span id="centerBadgeName">مركز تكويني</span></span></div>
       <div class="form-card">
         <div class="form-grid">
           <div class="form-field"><label>تصنيف الإنشغال</label><select id="form-type"></select></div>
           <div class="form-field"><label>درجة الأهمية</label><select id="form-priority"><option value="عادي">عادي 🟢</option><option value="متوسط">متوسط 🟡</option><option value="مستعجل جداً">مستعجل جداً 🔴</option></select></div>
-          <div class="form-field"><label>اسم المحرر</label><input type="text" id="form-reporter" placeholder="مثال: مدير المعهد..."></div>
-          <div class="form-field"><label>إرفاق ملف</label><input type="file" id="form-file" accept="image/*,application/pdf" onchange="handleCenterFileSelection(event)"></div>
+          <div class="form-field"><label>اسم محرر الإنشغال ( إختياري )</label><input type="text" id="form-reporter" placeholder="مثال: مراح فارس..."></div>
+          <div class="form-field"><label>إرفاق ملف / صورة</label><input type="file" id="form-file" accept="image/*,application/pdf" onchange="handleCenterFileSelection(event)"></div>
           <div class="paste-zone" id="pasteZone" tabindex="0">📸 اضغط هنا ثم Ctrl+V للصق لقطة شاشة</div>
-          <div class="form-field full"><label>الشرح الدقيق للمشكلة</label><textarea id="form-details" placeholder="اكتب شرحاً دقيقاً للمشكلة..."></textarea></div>
+          <div class="form-field full"><label>الشرح الدقيق للمشكلة أو الإنشغال</label><textarea id="form-details" placeholder="اكتب شرحاً دقيقاً للمشكلة..."></textarea></div>
         </div>
         <button class="btn-gold" style="width:100%; justify-content:center;" id="sendBtn" onclick="sendFromCenter()"><i class="fa-solid fa-broadcast"></i> بث وإرسال الإنشغال</button>
       </div>
@@ -527,7 +527,7 @@ tbody tr:hover { background: var(--table-hover); }
 
     <!-- CHAT HUB -->
     <section class="page hidden" id="page-chat-hub">
-      <div class="page-header"><h2><i class="fa-solid fa-comments"></i> متابعة الردود</h2><button class="btn-gold btn-sm" onclick="openInterChat()"><i class="fa-solid fa-users"></i> غرفة المؤسسات</button></div>
+      <div class="page-header"><h2><i class="fa-solid fa-comments"></i> متابعة الردود</h2><button class="btn-gold btn-sm" onclick="openInterChat()"><i class="fa-solid fa-users"></i> مراسلة المؤسسات</button></div>
       <div id="chatHubContainer"></div>
     </section>
 
@@ -663,12 +663,12 @@ const LS_KEYS = {
 const DEFAULT_FILE_TYPES = ["منظومة الرقمنة والأرضية الرقمية","مصلحة المتابعة البيداغوجية والبرامج","الهياكل والشبكات وتكنولوجيا المعلومات","الموارد البشرية والتكوين","الصيانة والتجهيزات"];
 
 const INSTITUTIONS_DATA = [
-  { name: "المعهد الوطني المتخصص في التكوين المهني برج بوعريريج", code: "INSFP001", password: "789012", type: "center" },
-  { name: "المعهد الوطني المتخصص في التكوين المهني برج بوعريريج", code: "INSFP002", password: "456789", type: "center" },
+  { name: "المعهد الوطني المتخصص في التكوين المهني ب .ب.ع 01", code: "INSFP001", password: "789012", type: "center" },
+  { name: "المعهد الوطني المتخصص في التكوين المهني ب .ب.ع 02", code: "INSFP002", password: "456789", type: "center" },
   { name: "المعهد الوطني المتخصص في التكوين المهني رأس الوادي", code: "INSFP003", password: "123456", type: "center" },
-  { name: "مركز التكوين المهني و التمهين برج بوعريريج", code: "CFPA001", password: "654321", type: "center" },
+  { name: "مركز التكوين المهني و التمهين برج بوعريريج03", code: "CFPA001", password: "654321", type: "center" },
   { name: "مركز التكوين المهني و التمهين العش", code: "CFPA002", password: "987654", type: "center" },
-  { name: "مركز التكوين المهني و التمهين برج بوعريريج", code: "CFPA003", password: "321987", type: "center" },
+  { name: "مركز التكوين المهني و التمهين برج بوعريريج04", code: "CFPA003", password: "321987", type: "center" },
   { name: "مركز التكوين المهني و التمهين حسناوة", code: "CFPA004", password: "159753", type: "center" },
   { name: "مركز التكوين المهني و التمهين الياشير", code: "CFPA005", password: "753951", type: "center" },
   { name: "مركز التكوين المهني و التمهين بليمور", code: "CFPA006", password: "852456", type: "center" },
@@ -898,7 +898,7 @@ function handleLogin() {
   if (selectedLoginRole === 'directorate') {
     const user = document.getElementById('loginUser').value.trim();
     const pass = document.getElementById('loginPass').value.trim();
-    if (pass === MASTER_PASSWORD || (user === 'hassan' && pass === '123456')) {
+    if (pass === MASTER_PASSWORD || (user === 'hassan' && pass === '102030')) {
       currentRole = 'directorate';
       document.getElementById('loginUser').value = 'hassan';
       initApp();
@@ -917,7 +917,7 @@ function handleLogin() {
       initApp();
     } else {
       err.style.display = 'block';
-      err.textContent = '⚠️ كلمة السر غير صحيحة! يرجى الاتصال بالمديرية.';
+      err.textContent = '⚠️ كلمة السر غير صحيحة! يرجى الاتصال بالمديرية ( حسان بلحاج ).';
     }
   }
 }
@@ -1070,8 +1070,8 @@ function setupSidebar() {
     navList.innerHTML = `
       <li><button class="nav-btn active" data-tab="dashboard" onclick="switchTab('dashboard')"><i class="fa-solid fa-gauge-high"></i> لوحة التحكم</button></li>
       <li><button class="nav-btn" data-tab="add" onclick="switchTab('add')"><i class="fa-solid fa-pen-to-square"></i> تدوين إنشغال</button></li>
-      <li><button class="nav-btn" data-tab="broadcast" onclick="switchTab('broadcast')"><i class="fa-solid fa-bullhorn"></i> إرسال للجميع</button></li>
-      <li><button class="nav-btn" data-tab="list" onclick="switchTab('list')"><i class="fa-solid fa-list-check"></i> متابعة القوائم</button></li>
+      <li><button class="nav-btn" data-tab="broadcast" onclick="switchTab('broadcast')"><i class="fa-solid fa-bullhorn"></i> إرسال إنشغال </button></li>
+      <li><button class="nav-btn" data-tab="list" onclick="switchTab('list')"><i class="fa-solid fa-list-check"></i> متابعة الإنشغالات </button></li>
       <li><button class="nav-btn" data-tab="archive" onclick="switchTab('archive')"><i class="fa-solid fa-box-archive"></i> الأرشيف</button></li>
       <li><button class="nav-btn" data-tab="tokens" onclick="switchTab('tokens')"><i class="fa-solid fa-key"></i> كلمات السر</button></li>
       <li><button class="nav-btn" data-tab="notes" onclick="switchTab('notes')"><i class="fa-solid fa-note-sticky"></i> المفكرة</button></li>
@@ -1311,7 +1311,7 @@ function handleCenterFileSelection(e) {
 
 function sendFromCenter() {
   const details = document.getElementById('form-details').value.trim();
-  if (!details) { alert("يرجى كتابة الشرح الدقيق للمشكلة قبل الإرسال."); return; }
+  if (!details) { alert("يرجى كتابة الشرح الدقيق للمشكلة أو الإنشغال قبل الإرسال."); return; }
   const type = document.getElementById('form-type').value;
   const priority = document.getElementById('form-priority').value;
   const reporter = document.getElementById('form-reporter').value.trim() || "غير محدد";
