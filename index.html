@@ -1052,7 +1052,19 @@ function saveToFirebase() {
     departments: departments,
     timestamp: Date.now()
   };
-  database.ref('data').set(data).catch(err => console.log('Save error:', err));
+  
+  // حفظ التصنيفات محلياً أيضاً
+  localStorage.setItem(LS_KEYS.fileTypes, JSON.stringify(fileTypes));
+  localStorage.setItem(LS_KEYS.core, JSON.stringify(activeIssues));
+  localStorage.setItem(LS_KEYS.resolved, JSON.stringify(archivedIssues));
+  localStorage.setItem(LS_KEYS.centerIssues, JSON.stringify(centerIssues));
+  localStorage.setItem(LS_KEYS.centerArchived, JSON.stringify(centerArchived));
+  localStorage.setItem(LS_KEYS.departments, JSON.stringify(departments));
+  
+  database.ref('data').set(data).catch(err => {
+    console.log('[v0] خطأ في الحفظ على Firebase:', err);
+    showToast('⚠️ تحذير', 'فشل الحفظ على الخادم، لكن تم الحفظ محلياً');
+  });
 }
 
 function listenToFirebase() {
@@ -1061,13 +1073,21 @@ function listenToFirebase() {
     if (data) {
       let changed = false;
       const oldCount = activeIssues.length + centerIssues.length;
+      const oldFileTypesCount = fileTypes.length;
       
       if (data.activeIssues) { activeIssues = data.activeIssues; changed = true; }
       if (data.archivedIssues) { archivedIssues = data.archivedIssues; changed = true; }
       if (data.centerIssues) { centerIssues = data.centerIssues; changed = true; }
       if (data.centerArchived) { centerArchived = data.centerArchived; changed = true; }
       if (data.interChat) { interChatMessages = data.interChat; changed = true; }
-      if (data.fileTypes) { fileTypes = data.fileTypes; changed = true; }
+      if (data.fileTypes) { 
+        fileTypes = data.fileTypes;
+        // التحقق من تغيير التصنيفات
+        if (fileTypes.length !== oldFileTypesCount) {
+          console.log('[v0] تم تحديث التصنيفات من Firebase:', fileTypes.length);
+        }
+        changed = true;
+      }
       if (data.departments) { 
         departments = data.departments;
         // التأكد من وجود جميع المصالح الأساسية
@@ -1113,7 +1133,10 @@ function forceSync() {
       if (data.centerIssues) centerIssues = data.centerIssues;
       if (data.centerArchived) centerArchived = data.centerArchived;
       if (data.interChat) interChatMessages = data.interChat;
-      if (data.fileTypes) fileTypes = data.fileTypes;
+      if (data.fileTypes) {
+        fileTypes = data.fileTypes;
+        console.log('[v0] تم تحديث التصنيفات من خادم Firebase:', fileTypes.length);
+      }
       if (data.departments) {
         departments = data.departments;
         DEPARTMENTS_BASE.forEach(base => {
@@ -1122,6 +1145,8 @@ function forceSync() {
           }
         });
       }
+      // حفظ البيانات محلياً
+      localStorage.setItem(LS_KEYS.fileTypes, JSON.stringify(fileTypes));
       updateUI();
       showToast('✅ تم التحديث', 'تم جلب أحدث البيانات بنجاح');
     }
@@ -1147,13 +1172,16 @@ function updateUI() {
     renderDeptDashboard();
     populateDeptFilters();
     populateCenterTargetDepts();
+    populateDropdowns();
   } else if (currentRole === 'department') {
     renderDepartmentIssues();
     renderDeptKPIs();
+    populateDropdowns();
   } else {
     renderChatHub();
     refreshCenterUI();
     populateCenterTargetDepts();
+    populateDropdowns();
   }
 }
 
@@ -1400,7 +1428,10 @@ function initApp() {
       if (data.centerIssues) centerIssues = data.centerIssues;
       if (data.centerArchived) centerArchived = data.centerArchived;
       if (data.interChat) interChatMessages = data.interChat;
-      if (data.fileTypes) fileTypes = data.fileTypes;
+      if (data.fileTypes) {
+        fileTypes = data.fileTypes;
+        console.log('[v0] تم تحميل التصنيفات من Firebase:', fileTypes);
+      }
       if (data.departments) {
         departments = data.departments;
         DEPARTMENTS_BASE.forEach(base => {
@@ -1409,6 +1440,8 @@ function initApp() {
           }
         });
       }
+      // حفظ جميع البيانات محلياً
+      localStorage.setItem(LS_KEYS.fileTypes, JSON.stringify(fileTypes));
     }
     setupInterface();
   });
@@ -2669,9 +2702,19 @@ function populateDropdowns() {
   
   if (centerSel) centerSel.innerHTML = INSTITUTIONS_DATA.map(i => `<option value="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join('');
   
-  const typeOptions = fileTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
-  if (typeSel) typeSel.innerHTML = typeOptions;
-  if (formType) formType.innerHTML = typeOptions;
+  // بناء خيارات التصنيفات مع إزالة التكرار
+  const uniqueFileTypes = [...new Set(fileTypes.filter(t => t && t.trim()))];
+  const typeOptions = uniqueFileTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  
+  if (typeSel) {
+    typeSel.innerHTML = typeOptions;
+    console.log('[v0] تحديث قائمة التصنيفات للمديرية:', uniqueFileTypes.length);
+  }
+  
+  if (formType) {
+    formType.innerHTML = typeOptions;
+    console.log('[v0] تحديث قائمة التصنيفات للمراكز:', uniqueFileTypes.length);
+  }
 }
 
 // ============================================================
@@ -2699,12 +2742,22 @@ function addFileType() {
   if (currentRole !== 'directorate') { showToast("⚠️ غير مسموح", "هذه الخاصية متاحة للمديرية فقط"); return; }
   const input = document.getElementById('newFileTypeInput');
   const val = input.value.trim();
-  if (!val) return;
+  if (!val) { showToast("⚠️ تنبيه", "يرجى إدخال اسم التصنيف"); return; }
+  
+  // التحقق من عدم تكرار التصنيف
+  if (fileTypes.includes(val)) { showToast("⚠️ تنبيه", "هذا التصنيف موجود بالفعل"); return; }
+  
   fileTypes.push(val);
+  localStorage.setItem(LS_KEYS.fileTypes, JSON.stringify(fileTypes));
   saveToFirebase();
   input.value = '';
+  input.focus();
   renderFileTypesManageList();
   populateDropdowns();
+  
+  // تحديث واجهة المراكز
+  updateUI();
+  showToast("✅ تم الإضافة", `تم إضافة التصنيف "${val}" بنجاح`);
 }
 
 function editFileType(idx) {
