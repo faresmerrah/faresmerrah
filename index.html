@@ -1038,7 +1038,8 @@ function addAuditLog(action, code, details) {
     time: Date.now()
   });
   if (auditLog.length > 500) auditLog = auditLog.slice(0, 500);
-  localStorage.setItem(LS_KEYS.auditLog, JSON.stringify(auditLog));
+  // لا حفظ محلي هنا؛ الاستدعاء المرافق لـ saveToFirebase() في مكان الاستدعاء
+  // هو من يبثّ سجل التدقيق إلى Firebase.
 }
 
 function renderAuditLog() {
@@ -1161,22 +1162,18 @@ function playNotificationSound() {
   }
 }
 
+// ⚠️ ملاحظة: تم عمداً حذف مفاتيح البيانات الضخمة (الانشغالات، الأرشيف، المصالح،
+// التصنيفات، سجل التدقيق...) من localStorage. هذه البيانات أصبحت تُدار بالكامل
+// عبر Firebase (متغيرات في الذاكرة + مستمعون Realtime)، لتفادي تضخم localStorage
+// مع نمو الأرشيف وتفادي أي التباس بين نسخة محلية قديمة ونسخة الخادم.
 const LS_KEYS = {
-  core: "hassan_core_db",
-  resolved: "hassan_resolved_db",
-  fileTypes: "hassan_file_types",
   notes: "hassan_notes",
-  centerIssues: "center_sent_issues",
-  centerArchived: "center_archived_issues",
   centerName: "center_app_name",
   remember: "hassan_remember",
   theme: "hassan_theme",
-  interChat: "inter_institution_chat",
   masterPass: "hassan_master_pass",
   lastSync: "hassan_last_sync",
-  departments: "hassan_departments",
   session: "hassan_session",
-  auditLog: "hassan_audit_log",
   mute: "hassan_mute_notifications"
 };
 
@@ -1258,40 +1255,33 @@ function loadTheme() {
 // 💾 STORAGE HELPERS
 // ============================================================
 function loadDB() {
-  activeIssues = JSON.parse(localStorage.getItem(LS_KEYS.core) || "[]");
-  archivedIssues = JSON.parse(localStorage.getItem(LS_KEYS.resolved) || "[]");
-  fileTypes = JSON.parse(localStorage.getItem(LS_KEYS.fileTypes) || "null") || DEFAULT_FILE_TYPES.slice();
-  centerIssues = JSON.parse(localStorage.getItem(LS_KEYS.centerIssues) || "[]");
-  centerArchived = JSON.parse(localStorage.getItem(LS_KEYS.centerArchived) || "[]");
-  interChatMessages = JSON.parse(localStorage.getItem(LS_KEYS.interChat) || "[]");
-  
-  // تحميل المصالح من localStorage أو استخدام القاعدة
-  const savedDepts = localStorage.getItem(LS_KEYS.departments);
-  if (savedDepts) {
-    try {
-      departments = JSON.parse(savedDepts);
-      // التأكد من أن جميع المصالح الأساسية موجودة
-      DEPARTMENTS_BASE.forEach(base => {
-        if (!departments.find(d => d.id === base.id)) {
-          departments.push({...base});
-        }
-      });
-    } catch(e) {
-      departments = DEPARTMENTS_BASE.slice();
-    }
-  } else {
-    departments = DEPARTMENTS_BASE.slice();
-  }
-  
+  // 🔥 لا نقرأ البيانات الضخمة من localStorage إطلاقاً.
+  // نبدأ بقيم فارغة/افتراضية مؤقتة، وسرعان ما يملأها Firebase عبر
+  // listenToFirebase() و القراءة الفورية once('value') في initApp().
+  activeIssues = [];
+  archivedIssues = [];
+  fileTypes = DEFAULT_FILE_TYPES.slice();
+  centerIssues = [];
+  centerArchived = [];
+  interChatMessages = [];
+  auditLog = [];
+  departments = DEPARTMENTS_BASE.slice();
+
   const savedPass = localStorage.getItem(LS_KEYS.masterPass);
   if (savedPass) MASTER_PASSWORD = savedPass;
   lastSyncTimestamp = parseInt(localStorage.getItem(LS_KEYS.lastSync) || "0");
-  auditLog = JSON.parse(localStorage.getItem(LS_KEYS.auditLog) || "[]");
   isMuted = localStorage.getItem(LS_KEYS.mute) === "1";
 }
 
+// 🔥 نتذكر آخر نسخة (JSON) تم إرسالها فعلياً لكل حقل، حتى لا نعيد كتابة/بث
+// حقل لم يتغير (مثل الأرشيف) في كل مرة يتغير فيها حقل آخر فقط (كنشغال جديد
+// أو رسالة شات). هذا هو سبب "الثقل" الحقيقي: كل استدعاء لـ saveToFirebase()
+// كان يرسل الأرشيف الكامل من جديد حتى لو لم يتغيّر شيء فيه، مما يجعل Firebase
+// يعيد بثّه لكل المستخدمين المتصلين عبر مستمع data/archivedIssues.
+let _lastPushedJSON = {};
+
 function _pushToFirebaseNow() {
-  const data = {
+  const candidates = {
     activeIssues: activeIssues,
     archivedIssues: archivedIssues,
     centerIssues: centerIssues,
@@ -1299,13 +1289,28 @@ function _pushToFirebaseNow() {
     interChat: interChatMessages,
     fileTypes: fileTypes,
     departments: departments,
-    auditLog: auditLog,
-    timestamp: Date.now()
+    auditLog: auditLog
   };
+
+  const toSend = {};
+  let hasChanges = false;
+  for (const key in candidates) {
+    const json = JSON.stringify(candidates[key]);
+    if (_lastPushedJSON[key] !== json) {
+      toSend[key] = candidates[key];
+      _lastPushedJSON[key] = json;
+      hasChanges = true;
+    }
+  }
+
+  if (!hasChanges) return; // لا شيء تغيّر فعلياً، لا داعي لأي طلب شبكي
+
+  toSend.timestamp = Date.now();
+
   // 🔥 استخدام update() بدل set(): لا يحذف أي مفتاح غير مذكور، وأكثر أمانًا
-  database.ref('data').update(data).catch(err => {
+  database.ref('data').update(toSend).catch(err => {
     console.log('[v0] خطأ في الحفظ على Firebase:', err);
-    showToast('⚠️ تحذير', 'فشل الحفظ على الخادم، لكن تم الحفظ محلياً');
+    showToast('⚠️ تحذير', 'فشل الحفظ على الخادم، حاول تحديث الصفحة أو التحقق من الاتصال');
   });
 }
 
@@ -1314,29 +1319,38 @@ function _pushToFirebaseNow() {
 const _debouncedPushToFirebase = debounce(_pushToFirebaseNow, 400);
 
 function saveToFirebase() {
-  // الحفظ المحلي يبقى فورياً حتى لا تُفقد أي بيانات عند إغلاق الصفحة بسرعة
-  localStorage.setItem(LS_KEYS.fileTypes, JSON.stringify(fileTypes));
-  localStorage.setItem(LS_KEYS.auditLog, JSON.stringify(auditLog));
-  localStorage.setItem(LS_KEYS.core, JSON.stringify(activeIssues));
-  localStorage.setItem(LS_KEYS.resolved, JSON.stringify(archivedIssues));
-  localStorage.setItem(LS_KEYS.centerIssues, JSON.stringify(centerIssues));
-  localStorage.setItem(LS_KEYS.centerArchived, JSON.stringify(centerArchived));
-  localStorage.setItem(LS_KEYS.departments, JSON.stringify(departments));
-
+  // 🔥 لا يوجد أي حفظ في localStorage هنا. Firebase وحده هو مصدر الحقيقة،
+  // ودالة _pushToFirebaseNow أعلاه تتكفّل بإرسال الحقول المتغيّرة فقط.
   _debouncedPushToFirebase();
 }
+
+// عند إغلاق الصفحة بسرعة قد يضيع تغيير لم يُرسل بعد بسبب الـ debounce (400ms).
+// هذا يضمن إرسال أي تغيير معلّق فوراً قبل مغادرة الصفحة.
+window.addEventListener('beforeunload', () => {
+  _pushToFirebaseNow();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') _pushToFirebaseNow();
+});
 
 // 🔥 استماع مُجزّأ: كل حقل من البيانات له مستمع مستقل تحت data/*
 // الفائدة: أي تغيير صغير (مثلاً تصنيف واحد) لا يجرّ معه بقية البيانات الضخمة
 // (الانشغالات، الأرشيف...) عبر الشبكة لكل المستخدمين المتصلين — كما كان يحدث
 // سابقاً مع مستمع واحد على عقدة data الكاملة.
+// 🔧 مساعد صغير: كل مرة نستقبل فيها قيمة حقل من Firebase، نسجّلها في
+// _lastPushedJSON أيضاً. هكذا لا يظن الجهاز أن الحقل "تغيّر محلياً" ويعيد
+// بثّه من جديد لبقية المستخدمين في أول saveToFirebase() تالية لسبب آخر تماماً.
+function _markSynced(key, val) {
+  _lastPushedJSON[key] = JSON.stringify(val);
+}
+
 function listenToFirebase() {
   database.ref('data/activeIssues').on('value', (snapshot) => {
     const val = snapshot.val();
     if (!val) return;
     const oldCount = activeIssues.length;
     activeIssues = val;
-    localStorage.setItem(LS_KEYS.core, JSON.stringify(activeIssues));
+    _markSynced('activeIssues', val);
     if (activeIssues.length > oldCount) {
       if (!isMuted) playNotificationSound();
       showToast('📩 إنشغال جديد', 'تم استلام إنشغال جديد من أحد المراكز!');
@@ -1348,7 +1362,7 @@ function listenToFirebase() {
     const val = snapshot.val();
     if (!val) return;
     archivedIssues = val;
-    localStorage.setItem(LS_KEYS.resolved, JSON.stringify(archivedIssues));
+    _markSynced('archivedIssues', val);
     updateUI();
   });
 
@@ -1357,7 +1371,7 @@ function listenToFirebase() {
     if (!val) return;
     const oldCount = centerIssues.length;
     centerIssues = val;
-    localStorage.setItem(LS_KEYS.centerIssues, JSON.stringify(centerIssues));
+    _markSynced('centerIssues', val);
     if (centerIssues.length > oldCount) {
       if (!isMuted) playNotificationSound();
       showToast('📩 إنشغال جديد', 'تم استلام إنشغال جديد من أحد المراكز!');
@@ -1369,7 +1383,7 @@ function listenToFirebase() {
     const val = snapshot.val();
     if (!val) return;
     centerArchived = val;
-    localStorage.setItem(LS_KEYS.centerArchived, JSON.stringify(centerArchived));
+    _markSynced('centerArchived', val);
     updateUI();
   });
 
@@ -1377,7 +1391,7 @@ function listenToFirebase() {
     const val = snapshot.val();
     if (!val) return;
     interChatMessages = val;
-    localStorage.setItem(LS_KEYS.interChat, JSON.stringify(interChatMessages));
+    _markSynced('interChat', val);
     updateUI();
   });
 
@@ -1385,7 +1399,7 @@ function listenToFirebase() {
     const val = snapshot.val();
     if (!val) return;
     fileTypes = val;
-    localStorage.setItem(LS_KEYS.fileTypes, JSON.stringify(fileTypes));
+    _markSynced('fileTypes', val);
     console.log('[v0] تم تحديث التصنيفات من Firebase:', fileTypes.length);
     updateUI();
   });
@@ -1400,7 +1414,7 @@ function listenToFirebase() {
         departments.push({...base});
       }
     });
-    localStorage.setItem(LS_KEYS.departments, JSON.stringify(departments));
+    _markSynced('departments', departments);
     updateUI();
   });
 
@@ -1408,7 +1422,7 @@ function listenToFirebase() {
     const val = snapshot.val();
     if (!val) return;
     auditLog = val;
-    localStorage.setItem(LS_KEYS.auditLog, JSON.stringify(auditLog));
+    _markSynced('auditLog', val);
     updateUI();
   });
 }
@@ -1441,9 +1455,8 @@ function forceSync() {
         });
       }
       if (data.auditLog) auditLog = data.auditLog;
-      // حفظ البيانات محلياً
-      localStorage.setItem(LS_KEYS.fileTypes, JSON.stringify(fileTypes));
-      localStorage.setItem(LS_KEYS.auditLog, JSON.stringify(auditLog));
+      _markSynced('fileTypes', fileTypes);
+      _markSynced('auditLog', auditLog);
       updateUI();
       showToast('✅ تم التحديث', 'تم جلب أحدث البيانات بنجاح');
     }
@@ -1599,7 +1612,6 @@ function handleLogin() {
         const baseDept = DEPARTMENTS_BASE.find(d => d.id === cred.departmentId);
         if (baseDept) {
           departments.push({...baseDept});
-          localStorage.setItem(LS_KEYS.departments, JSON.stringify(departments));
           dept = departments.find(d => d.id === cred.departmentId);
         }
       }
@@ -1737,8 +1749,15 @@ function initApp() {
           }
         });
       }
-      // حفظ جميع البيانات محلياً
-      localStorage.setItem(LS_KEYS.fileTypes, JSON.stringify(fileTypes));
+      // 🔥 تسجيل كل الحقول كـ "متزامنة" حتى لا تُعاد كتابتها لاحقاً بلا داعٍ
+      _markSynced('activeIssues', activeIssues);
+      _markSynced('archivedIssues', archivedIssues);
+      _markSynced('centerIssues', centerIssues);
+      _markSynced('centerArchived', centerArchived);
+      _markSynced('interChat', interChatMessages);
+      _markSynced('fileTypes', fileTypes);
+      _markSynced('departments', departments);
+      _markSynced('auditLog', auditLog);
     }
     setupInterface();
   });
@@ -2077,7 +2096,6 @@ function editDepartmentInfo(id) {
   }
   
   saveToFirebase();
-  localStorage.setItem(LS_KEYS.departments, JSON.stringify(departments));
   renderDepartmentsList();
   renderDeptDashboard();
   refreshAllDropdowns(); // تحديث القوائم المنسدلة
@@ -2855,12 +2873,16 @@ function resetPasteZone() {
 // ============================================================
 // 💬 CHAT SYSTEM
 // ============================================================
+// 🔥 كاش في الذاكرة فقط (بدون localStorage). يُملأ عبر listenToChats()
+// أدناه الذي يستمع مباشرة لعقدة 'chats' في Firebase.
+const _chatCache = {};
+
 function getChatMessages(code) {
-  return JSON.parse(localStorage.getItem('chat_messages_' + code) || "[]");
+  return _chatCache[code] || [];
 }
 
 function saveChatMessages(code, msgs) {
-  localStorage.setItem('chat_messages_' + code, JSON.stringify(msgs));
+  _chatCache[code] = msgs;
   const chatData = {};
   chatData[code] = msgs;
   database.ref('chats').update(chatData);
@@ -3025,13 +3047,16 @@ function openInterChat() {
 
 function closeInterChat() { document.getElementById('interChatModal').classList.remove('open'); }
 
+// 🔥 توحيد المصدر: نستخدم المتغيّر العام interChatMessages نفسه الذي تتم
+// مزامنته عبر data/interChat في Firebase (بدل مسار منفصل 'interChat' ونسخة
+// محلية مستقلة كانتا موجودتين سابقاً، وهو ما كان يسبب ازدواجية في البيانات).
 function getInterChatMessages() {
-  return JSON.parse(localStorage.getItem(LS_KEYS.interChat) || "[]");
+  return interChatMessages;
 }
 
 function saveInterChatMessages(msgs) {
-  localStorage.setItem(LS_KEYS.interChat, JSON.stringify(msgs));
-  database.ref('interChat').set(msgs);
+  interChatMessages = msgs;
+  saveToFirebase();
 }
 
 function renderInterChatMessages() {
@@ -3298,7 +3323,6 @@ function addFileType() {
   if (fileTypes.includes(val)) { showToast("⚠️ تنبيه", "هذا التصنيف موجود بالفعل"); return; }
   
   fileTypes.push(val);
-  localStorage.setItem(LS_KEYS.fileTypes, JSON.stringify(fileTypes));
   saveToFirebase();
   input.value = '';
   input.focus();
@@ -3575,14 +3599,9 @@ window.onload = function() {
   restoreSession();
 };
 
-window.addEventListener('storage', function(e) {
-  const watchedKeys = [LS_KEYS.core, LS_KEYS.resolved, LS_KEYS.centerIssues, LS_KEYS.centerArchived, LS_KEYS.departments];
-  if (watchedKeys.includes(e.key)) {
-    if (currentRole === 'directorate') { renderKPIs(); updateChart(); renderList(); renderArchive(); renderDepartmentsList(); renderDeptDashboard(); }
-    else if (currentRole === 'department') { renderDeptIssuesTable(); renderDeptKPIs(); }
-    else { renderChatHub(); }
-  }
-});
+// ⚠️ تم حذف مستمع 'storage' الخاص بمزامنة التبويبات عبر localStorage: لم يعد
+// له أي فائدة الآن لأن كل البيانات تُزامَن مباشرة عبر مستمعي Firebase أعلاه،
+// وهي تعمل بنفس الكفاءة بين التبويبات وبين الأجهزة المختلفة.
 
 console.log('🚀 منصة التنسيق الرقمي - تعمل مع Firebase');
 console.log('📡 تحديث فوري بين جميع الأجهزة!');
